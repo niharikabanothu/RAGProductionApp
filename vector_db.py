@@ -1,5 +1,5 @@
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import VectorParams, Distance, PointStruct
 from typing import List, Dict
 import os
 
@@ -9,35 +9,30 @@ class QdrantStorage:
     Wrapper for Qdrant vector database operations.
     """
     
-    def __init__(self, collection_name: str = "rag_collection"):
+    def __init__(self, url: str = "http://localhost:6333", collection: str = "docs", dim: int = 768):
         """
         Initialize Qdrant client and ensure collection exists.
         
         Args:
-            collection_name: Name of the collection to use
+            url: Qdrant server URL
+            collection: Name of the collection to use
+            dim: Vector dimension (768 for Gemini text-embedding-004)
         """
-        self.collection_name = collection_name
-        
-        # Initialize client (use in-memory or URL from env)
-        qdrant_url = os.getenv("QDRANT_URL")
-        if qdrant_url:
-            self.client = QdrantClient(url=qdrant_url)
-        else:
-            # Use in-memory storage for development
-            self.client = QdrantClient(":memory:")
+        # Use environment variable if available, otherwise use provided url
+        qdrant_url = os.getenv("QDRANT_URL", url)
+        self.client = QdrantClient(url=qdrant_url, timeout=30)
+        self.collection = collection
+        self.dim = dim
         
         # Create collection if it doesn't exist
         self._ensure_collection()
     
     def _ensure_collection(self):
         """Create collection if it doesn't exist."""
-        collections = self.client.get_collections().collections
-        collection_names = [c.name for c in collections]
-        
-        if self.collection_name not in collection_names:
+        if not self.client.collection_exists(self.collection):
             self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
+                collection_name=self.collection,
+                vectors_config=VectorParams(size=self.dim, distance=Distance.COSINE),
             )
     
     def upsert(self, ids: List[str], vectors: List[List[float]], payloads: List[Dict]):
@@ -53,11 +48,7 @@ class QdrantStorage:
             PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i])
             for i in range(len(ids))
         ]
-        
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points
-        )
+        self.client.upsert(self.collection, points=points)
     
     def search(self, query_vector: List[float], top_k: int = 5) -> Dict[str, List]:
         """
@@ -71,12 +62,21 @@ class QdrantStorage:
             Dictionary with 'contexts' and 'sources' lists
         """
         results = self.client.search(
-            collection_name=self.collection_name,
+            collection_name=self.collection,
             query_vector=query_vector,
+            with_payload=True,
             limit=top_k
         )
         
-        contexts = [hit.payload["text"] for hit in results]
-        sources = [hit.payload["source"] for hit in results]
+        contexts = []
+        sources = set()
         
-        return {"contexts": contexts, "sources": sources}
+        for r in results:
+            payload = getattr(r, "payload", None) or {}
+            text = payload.get("text", "")
+            source = payload.get("source", "")
+            if text:
+                contexts.append(text)
+                sources.add(source)
+        
+        return {"contexts": contexts, "sources": list(sources)}

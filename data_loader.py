@@ -1,53 +1,88 @@
+import google.generativeai as genai
 from llama_index.readers.file import PDFReader
 from llama_index.core.node_parser import SentenceSplitter
-from openai import OpenAI
+from dotenv import load_dotenv
 import os
 from typing import List
 
+load_dotenv()
 
-def load_and_chunk_pdf(pdf_path: str, chunk_size: int = 512, chunk_overlap: int = 50) -> List[str]:
+# Initialize Google Gemini client (FREE!)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Embedding configuration - using Google's free embedding model
+EMBED_MODEL = "models/embedding-001"
+EMBED_DIM = 768  # Dimension for Gemini embedding-001
+
+# Text splitter configuration
+splitter = SentenceSplitter(chunk_size=1000, chunk_overlap=200)
+
+
+def load_and_chunk_pdf(path: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[str]:
     """
     Load a PDF and chunk it into smaller text segments.
     
     Args:
-        pdf_path: Path to the PDF file
+        path: Path to the PDF file
         chunk_size: Size of each chunk in characters
         chunk_overlap: Overlap between chunks
         
     Returns:
         List of text chunks
     """
-    # Load PDF
-    reader = PDFReader()
-    documents = reader.load_data(file=pdf_path)
+    # Load PDF documents
+    docs = PDFReader().load_data(file=path)
     
-    # Chunk the documents
-    splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    # Extract text from documents
+    texts = [d.text for d in docs if getattr(d, "text", None)]
+    
+    # Chunk the text
     chunks = []
-    
-    for doc in documents:
-        nodes = splitter.get_nodes_from_documents([doc])
-        chunks.extend([node.text for node in nodes])
+    for t in texts:
+        chunks.extend(splitter.split_text(t))
     
     return chunks
 
 
-def embed_texts(texts: List[str], model: str = "text-embedding-3-small") -> List[List[float]]:
+def embed_texts(texts: List[str]) -> List[List[float]]:
     """
-    Embed texts using OpenAI's embedding model.
+    Embed texts using Google Gemini's FREE embedding model.
     
     Args:
         texts: List of texts to embed
-        model: OpenAI embedding model to use
         
     Returns:
-        List of embedding vectors
+        List of embedding vectors (768 dimensions each)
     """
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    embeddings = []
+    for text in texts:
+        result = genai.embed_content(
+            model=EMBED_MODEL,
+            content=text,
+            task_type="retrieval_document"
+        )
+        embeddings.append(result['embedding'])
+    return embeddings
+
+
+def embed_query(text: str) -> List[float]:
+    """
+    Embed a single query text for search.
     
-    response = client.embeddings.create(
-        input=texts,
-        model=model
+    Args:
+        text: Query text to embed
+        
+    Returns:
+        Embedding vector (768 dimensions)
+    """
+    result = genai.embed_content(
+        model=EMBED_MODEL,
+        content=text,
+        task_type="retrieval_query"
     )
-    
-    return [item.embedding for item in response.data]
+    return result['embedding']
+
+
+def get_embedding_dimension() -> int:
+    """Return the embedding dimension for the current model."""
+    return EMBED_DIM

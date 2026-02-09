@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import uuid
 import os
 import datetime
-from data_loader import load_and_chunk_pdf, embed_texts
+from data_loader import load_and_chunk_pdf, embed_texts, embed_query
 from vector_db import QdrantStorage
 from custom_types import RAQQueryResult, RAGSearchResult, RAGUpsertResult, RAGChunkAndSrc
 
@@ -24,13 +24,13 @@ inngest_client = inngest.Inngest(
     fn_id="RAG: Ingest PDF",
     trigger=inngest.TriggerEvent(event="rag/ingest_pdf"),
     throttle=inngest.Throttle(
-        limit=2, 
+        limit=10, 
         period=datetime.timedelta(minutes=1),
         key="event.data.source_id"
     ),
     rate_limit=inngest.RateLimit(
-        limit=1,
-        period=datetime.timedelta(hours=4),
+        limit=10,
+        period=datetime.timedelta(hours=1),
         key="event.data.source_id",
   ),
 )
@@ -61,7 +61,7 @@ async def rag_ingest_pdf(ctx: inngest.Context):
 )
 async def rag_query_pdf_ai(ctx: inngest.Context):
     def _search(question: str, top_k: int = 5) -> RAGSearchResult:
-        query_vec = embed_texts([question])[0]
+        query_vec = embed_query(question)
         store = QdrantStorage()
         found = store.search(query_vec, top_k)
         return RAGSearchResult(contexts=found["contexts"], sources=found["sources"])

@@ -1,22 +1,26 @@
-from pydantic import BaseModel
-from typing import List
+import pydantic
+from typing import Optional
 
 
-class RAGChunkAndSrc(BaseModel):
-    chunks: List[str]
-    source_id: str
+class RAGChunkAndSrc(pydantic.BaseModel):
+    """Represents chunks from a PDF with their source ID."""
+    chunks: list[str]
+    source_id: Optional[str] = None
 
 
-class RAGUpsertResult(BaseModel):
+class RAGUpsertResult(pydantic.BaseModel):
+    """Result from upserting vectors into the database."""
     ingested: int
 
 
-class RAGSearchResult(BaseModel):
-    contexts: List[str]
-    sources: List[str]
+class RAGSearchResult(pydantic.BaseModel):
+    """Result from searching the vector database."""
+    contexts: list[str]
+    sources: list[str]
 
 
-class RAQQueryResult(BaseModel):
+class RAQQueryResult(pydantic.BaseModel):
+    """Result from an AI query with answer and sources."""
     answer: str
-    sources: List[str]
+    sources: list[str]
     num_contexts: int
