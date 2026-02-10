@@ -9,22 +9,19 @@ class QdrantStorage:
     Wrapper for Qdrant vector database operations.
     """
     
-    def __init__(self, url: str = "http://localhost:6333", collection: str = "docs", dim: int = 768):
+    def __init__(self, url: str = "http://localhost:6333", collection: str = "docs", dim: int = 3072):
         """
         Initialize Qdrant client and ensure collection exists.
         
         Args:
             url: Qdrant server URL
             collection: Name of the collection to use
-            dim: Vector dimension (768 for Gemini text-embedding-004)
+            dim: Vector dimension (3072 for text-embedding-3-large)
         """
-        # Use environment variable if available, otherwise use provided url
         qdrant_url = os.getenv("QDRANT_URL", url)
         self.client = QdrantClient(url=qdrant_url, timeout=30)
         self.collection = collection
         self.dim = dim
-        
-        # Create collection if it doesn't exist
         self._ensure_collection()
     
     def _ensure_collection(self):
@@ -38,11 +35,6 @@ class QdrantStorage:
     def upsert(self, ids: List[str], vectors: List[List[float]], payloads: List[Dict]):
         """
         Upsert vectors into the collection.
-        
-        Args:
-            ids: List of unique IDs for the vectors
-            vectors: List of embedding vectors
-            payloads: List of metadata dictionaries
         """
         points = [
             PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i])
@@ -53,13 +45,6 @@ class QdrantStorage:
     def search(self, query_vector: List[float], top_k: int = 5) -> Dict[str, List]:
         """
         Search for similar vectors.
-        
-        Args:
-            query_vector: Query embedding vector
-            top_k: Number of results to return
-            
-        Returns:
-            Dictionary with 'contexts' and 'sources' lists
         """
         results = self.client.search(
             collection_name=self.collection,

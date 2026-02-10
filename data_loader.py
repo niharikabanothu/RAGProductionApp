@@ -1,4 +1,4 @@
-import google.generativeai as genai
+from openai import OpenAI
 from llama_index.readers.file import PDFReader
 from llama_index.core.node_parser import SentenceSplitter
 from dotenv import load_dotenv
@@ -7,12 +7,12 @@ from typing import List
 
 load_dotenv()
 
-# Initialize Google Gemini client (FREE!)
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Embedding configuration - using Google's free embedding model
-EMBED_MODEL = "models/embedding-001"
-EMBED_DIM = 768  # Dimension for Gemini embedding-001
+# Embedding configuration
+EMBED_MODEL = "text-embedding-3-large"
+EMBED_DIM = 3072  # Dimension for text-embedding-3-large
 
 # Text splitter configuration
 splitter = SentenceSplitter(chunk_size=1000, chunk_overlap=200)
@@ -30,57 +30,29 @@ def load_and_chunk_pdf(path: str, chunk_size: int = 1000, chunk_overlap: int = 2
     Returns:
         List of text chunks
     """
-    # Load PDF documents
     docs = PDFReader().load_data(file=path)
-    
-    # Extract text from documents
     texts = [d.text for d in docs if getattr(d, "text", None)]
-    
-    # Chunk the text
     chunks = []
     for t in texts:
         chunks.extend(splitter.split_text(t))
-    
     return chunks
 
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
     """
-    Embed texts using Google Gemini's FREE embedding model.
+    Embed texts using OpenAI's embedding model.
     
     Args:
         texts: List of texts to embed
         
     Returns:
-        List of embedding vectors (768 dimensions each)
+        List of embedding vectors (3072 dimensions each)
     """
-    embeddings = []
-    for text in texts:
-        result = genai.embed_content(
-            model=EMBED_MODEL,
-            content=text,
-            task_type="retrieval_document"
-        )
-        embeddings.append(result['embedding'])
-    return embeddings
-
-
-def embed_query(text: str) -> List[float]:
-    """
-    Embed a single query text for search.
-    
-    Args:
-        text: Query text to embed
-        
-    Returns:
-        Embedding vector (768 dimensions)
-    """
-    result = genai.embed_content(
+    response = client.embeddings.create(
         model=EMBED_MODEL,
-        content=text,
-        task_type="retrieval_query"
+        input=texts,
     )
-    return result['embedding']
+    return [item.embedding for item in response.data]
 
 
 def get_embedding_dimension() -> int:
