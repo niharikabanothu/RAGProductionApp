@@ -46,9 +46,9 @@ class QdrantStorage:
         """
         Search for similar vectors.
         """
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.collection,
-            query_vector=query_vector,
+            query=query_vector,
             with_payload=True,
             limit=top_k
         )
@@ -56,8 +56,8 @@ class QdrantStorage:
         contexts = []
         sources = set()
         
-        for r in results:
-            payload = getattr(r, "payload", None) or {}
+        for point in results.points:
+            payload = getattr(point, "payload", None) or {}
             text = payload.get("text", "")
             source = payload.get("source", "")
             if text:

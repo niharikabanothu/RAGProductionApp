@@ -23,16 +23,7 @@ inngest_client = inngest.Inngest(
 @inngest_client.create_function(
     fn_id="RAG: Ingest PDF",
     trigger=inngest.TriggerEvent(event="rag/ingest_pdf"),
-    throttle=inngest.Throttle(
-        limit=10, 
-        period=datetime.timedelta(minutes=1),
-        key="event.data.source_id"
-    ),
-    rate_limit=inngest.RateLimit(
-        limit=10,
-        period=datetime.timedelta(hours=1),
-        key="event.data.source_id",
-    ),
+    retries=0,
 )
 async def rag_ingest_pdf(ctx: inngest.Context):
     def _load(ctx: inngest.Context) -> RAGChunkAndSrc:
@@ -57,7 +48,8 @@ async def rag_ingest_pdf(ctx: inngest.Context):
 
 @inngest_client.create_function(
     fn_id="RAG: Query PDF",
-    trigger=inngest.TriggerEvent(event="rag/query_pdf_ai")
+    trigger=inngest.TriggerEvent(event="rag/query_pdf_ai"),
+    retries=0,
 )
 async def rag_query_pdf_ai(ctx: inngest.Context):
     def _search(question: str, top_k: int = 5) -> RAGSearchResult:
@@ -83,8 +75,7 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
 
         response = llm_client.chat.completions.create(
             model="gpt-5-nano",
-            max_tokens=1024,
-            temperature=0.2,
+            max_completion_tokens=1024,
             messages=[
                 {"role": "system", "content": "You answer questions using only the provided context."},
                 {"role": "user", "content": user_content}
